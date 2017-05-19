@@ -10,21 +10,11 @@
 Introduction
 ============
 
-<!--
-  TODO Will describe the contents of this document
+In this report we will discuss how to do basic parallel programming in haskell.
+We will talk about some of the import aspects that arise from the special
+situation of working in a lazy language.
 
-  Proposed layout:
-
-   * Controlling evaluation
-     - `seq`
-     - `pseq`
-     - `NFData`
-   * Evaluation in parallel
-     - Sparks
-     - `par`
-   * The `Eval` monad
-   * Strategies
--->
+Then we will show how to implement a parallel map function in haskell.
 
 Controlling evaluation
 ======================
@@ -150,9 +140,12 @@ Parmap
 ======
 
 To illustrate some of the challenges that faces the parallel haskell programmer
-we will now implement a parallel map function. For testing purposes we define a
-function `nfib` which serves as a convenient way of generating a bunch of
-instructions for your machine:
+we will now implement a parallel map function. All benchmark results mentioned
+are times measured with Criterion. Full bench-suite and results are given at the
+end.
+
+For testing purposes we define a function `nfib` which serves as a convenient
+way of generating a bunch of instructions for your machine:
 
 > nfib :: Int -> Integer
 > nfib n
