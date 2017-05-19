@@ -27,9 +27,17 @@ run: build
 
 build: $(MAIN)
 
-$(MAIN): *.hs *.lhs
+$(MAIN): *.lhs
 	ghc $(SOURCE) \
 		-main-is $(MAIN) \
 		-debug \
 		-threaded \
 		-rtsopts
+
+dist: report
+	tar \
+		--transform "s/^/$(PROJECT)\//" \
+		-zcvf $(PROJECT).tar.gz \
+		$(SOURCE) \
+		Makefile \
+		$(PDF)

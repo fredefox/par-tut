@@ -30,8 +30,8 @@ being performed. Similarly `b` might result depend on `a` in which case the
 evaluation of `b` won't be able to finish until `a` is available. This will also
 to "too much" work being performed.
 
-`seq`
------
+Controlling evaluation with `seq`
+---------------------------------
 
 These two examples clearly motivate the need for a way of controlling 1) forcing
 evaluations and 2) controlling evaluation order. Partially evaluated expressions
@@ -98,8 +98,8 @@ argument but a decent chunk of null-characters.
 that reason it has a close cousin named `pseq` defined in the package `parallel`
 which behaves identically to `seq` with this extra guarantee.
 
-`NFData`
---------
+Full evaluation using `NFData`
+------------------------------
 
 As mentioned above we wanted to be able to control forcing evaluation and
 evaluation order. We get this from `pseq`, but surely evaluating something to
