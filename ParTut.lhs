@@ -1,6 +1,9 @@
-\documentclass{article}
-%include polycode.fmt
-\begin{document}
+{-# OPTIONS_GHC -pgmL markdown-unlit #-}
+
+Hopefully a header
+==================
+
+# foo
 This is the famous ‘‘Hello world’’ example,
 written in Haskell:
 
