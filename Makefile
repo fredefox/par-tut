@@ -19,6 +19,12 @@ $(PDF): $(SOURCE) *.tex
 		-V papersize:a4 \
 		-V geometry:margin=1.5in
 
+github: README.md
+
+README.md: $(SOURCE)
+	pandoc $(SOURCE) \
+		-o README.md
+
 run: build
 	$(EXE) +RTS \
 		-N4 \
