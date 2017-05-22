@@ -13,33 +13,34 @@ Introduction
 ============
 
 In this report we will discuss how to do basic parallel programming in
-haskell. We will talk about some of the import aspects that arise from
-the special situation of working in a lazy language.
+Haskell. We will talk about some of the important aspects that arise
+from the special situation of working in a lazy language.
 
-Then we will show how to implement a parallel map function in haskell.
+As an example we will show how to implement a parallel map function in
+Haskell.
 
 Controlling evaluation
 ======================
 
-When writing parallel programs in Haskell there is one particular thing
-that the author most pay particaluar attention to, namely controlling
-the order of evaluation. Since haskell is lazy by default extra care
-needs to be put into the construction of parallel programs. Say you want
-to compute two expressions `a` and `b` in parallel and suppose that both
-expressions depend on the result of some common expression `e` (`e`
-appears free in `a` and `b`), then naïvely starting a computation of `a`
-in parallel with `b` would lead to extra work being performed. Similarly
-`b` might result depend on `a` in which case the evaluation of `b` won't
-be able to finish until `a` is available. This will also to "too much"
+Haskell programmers face a unique challenge when writing parallel
+programs. Haskell's laziness makes the order of evaluation
+unpredictable. To get the optimal performance out of a parallel Haskell
+program, the programmer must take care to explicitly control the order
+of evaluation. Let's say you want to compute two expressions `a` and `b`
+in parallel and suppose that both expressions depend on the result of
+some common expression `e`, then naïvely starting a computation of `a`
+in parallel with `b` could lead to extra work being performed. Similarly
+`b` might depend on `a` in which case the evaluation of `b` won't be
+able to finish until `a` is available. This will also result in more
 work being performed.
 
 Controlling evaluation with `seq`
 ---------------------------------
 
-These two examples clearly motivate the need for a way of controlling 1)
-forcing evaluations and 2) controlling evaluation order. Partially
-evaluated expressions are represented as "thunks" in haskell. These can
-be thought of as a description on how to arrive at a final result.
+The two previous examples illustrate the need for a way of controlling
+1) forcing evaluations and 2) controlling evaluation order. Partially
+evaluated expressions are represented as *thunks* in Haskell. These can
+be thought of as a description of how to arrive at a final result.
 Thunks can be inspected in `ghci` using `:sprint`. A simple example will
 show this:
 
@@ -49,10 +50,10 @@ show this:
 > x = _
 ```
 
-The `_` -part here is the unevaluated part of the expression. We see
-that nothing is evaluated immediately after the definition of `x`. We
-can force a value to be evaluated to *Weak Head Normal Form* or WHNF for
-short by using `seq`:
+The `_`-part here is the unevaluated part of the expression. We see that
+nothing is evaluated immediately after the definition of `x`. We can
+force a value to be evaluated to *Weak Head Normal Form* (WHNF for
+short) by using `seq`:
 
 ``` {.sourceCode .haskell}
 § seq x ()
@@ -61,8 +62,8 @@ short by using `seq`:
 ```
 
 Now we see that part of `x` is evaluted. Note, however, that the
-reduction of `x` to WHNF will only happen once the result of the entire
-expression is needed. So in this example `x` is not reduced:
+reduction of `x` to WHNF will only happen once the result of `seq x ()`
+is needed. So in this example `x` is not reduced:
 
 ``` {.sourceCode .haskell}
 § let x = "Ahoy!"
@@ -86,16 +87,15 @@ of `x` we see that it has the type:
 
 ``` {.sourceCode .haskell}
 § :t x
-> x :: Num t => t
+> x :: Num  => t
 ```
 
 Think of the constraints as regular function parameters (which in a
 sense is exactly what they are). The type of `x` is polymorphic due to
-how haskell treats the piece of syntax that is a number - it's
-essentially syntactic sugar for `fromInteger x`. So `x` cannot be
-evaluated to WHNF because it is not fully applied! Haskell non-zealous
-commitment pops up all sorts of unexpected places. Take this for
-example:
+how Haskell treats the piece of syntax that is a number - it's
+essentially syntactic sugar for `fromInteger x`. So really `x` is in
+WHNF, but it's a lambda-abstraction! Here is another interesting example
+of a function behaving unexpectedly:
 
 ``` {.sourceCode .haskell}
 § s <- readFile "/dev/zero"
@@ -107,9 +107,10 @@ example:
 > s = '' : '' : '' : ... : _
 ```
 
-We see that when we first try to `sprint` `s` no reading has actually
-taken place. When we force it to WHNF it suddenly contains, not only
-it's first argument but a decent chunk of null-characters.
+We see that when we first try to `sprint` `s` that no reading has
+actually taken place. When we force it to WHNF it suddenly contains not
+only the first element of the list, but a decent chunk of
+null-characters.
 
 `seq` does not give guarantees as to which operand will be evaluated
 first. For that reason it has a close cousin named `pseq` defined in the
@@ -120,14 +121,13 @@ Full evaluation using `NFData`
 ------------------------------
 
 As mentioned above we wanted to be able to control forcing evaluation
-and evaluation order. We get this from `pseq`, but surely evaluating
-something to WHNF cannot always be sufficiently large task for it to be
-something worthwhile doing in parallel. This is exactly right. What if
-we want to fully evaluate an expression? Well for that we utilize
-haskells typeclass system.
-
-The `deepseq` package defines a typeclass `NFData` that lets us do
-exactly that:
+and evaluation order. We get this from `pseq`, but evaluating something
+to WHNF cannot always be a sufficiently large task for it to be
+worthwhile doing in parallel. This is because there is an overhead
+associated with starting parallel computations in Haskell. For that
+reason we want to be able to explicitly fully evaluate expressions. The
+`deepseq` package defines a typeclass `NFData` that lets us do exactly
+that:
 
 ``` {.sourceCode .haskell}
 class NFData a where
@@ -143,35 +143,44 @@ And it works as expected:
 > x = "Tjena!"
 ```
 
+Instances of `NFData` can then be given for various types that give
+description of how to fully evaluate members of it's type. E.g.:
+
+``` {.sourceCode .haskell}
+instance NFData a => NFData [a] where
+  rnf [] = ()
+  rnf (a : as) = rnf a `seq` rnf as
+```
+
 Parallel evaluation
 ===================
 
 If we want to evaluate two expressions in parallel we need to explicitly
-state this in our program. If we have to expressions `a` and `b` that
-don't depend on each other we inform ghc of our wish like so:
+state this in our program. If we have two expressions `a` and `b` that
+we wist to evaluate in parallel, then we can inform GHC like so:
 
 ``` {.sourceCode .haskell}
 a `par` b
 ```
 
-Now, ghc can be a bit fickle - this may not actually result in `a` and
+Now, GHC can be a bit fickle - this may not actually result in `a` and
 `b` being evaluated in parallel. What it will do, however, is create a
 *spark*. A spark can be thought of as a potential source of parallelism.
 One advantage of sparks is that they are really cheap to create. So when
-parallelizing programs in haskell we can be generous with creating them.
+parallelizing programs in Haskell we can be generous with creating them.
 However, we still want our sparks to do a reasonable amount of work so
-that the parallelism outways the overhead of using sparks.
+that the parallelism outweighs the overhead of using sparks.
 
 Parmap
 ======
 
-To illustrate some of the challenges that faces the parallel haskell
+To illustrate some of the challenges that face the parallel Haskell
 programmer we will now implement a parallel map function. All benchmark
-results mentioned are times measured with Criterion. Full bench-suite
-and results are given at the end.
+results given are times measured with Criterion. A full bench-suite and
+results are given at the end.
 
 For testing purposes we define a function `nfib` which serves as a
-convenient way of generating a bunch of instructions for your machine:
+convenient way of making a bunch of busy-work for your machine.
 
 ``` {.sourceCode .literate .haskell}
 nfib :: Int -> Integer
@@ -207,14 +216,14 @@ task1 m = parMap0 nfib [0..m]
 ```
 
 It took 861.4 ms to run. One problem with this implementation is that it
-will correctly spark the application of f on the first argument, but
+will correctly spark the application of `f` on the first argument, but
 that value is used immediately afterwards in the call to `(:)` so in
-reality we're gaining not parallelism, but suffering the overhead of
+reality we're not gaining any parallelism, but suffering the overhead of
 creating sparks as can be seen from the benchmark output.
 
-We fix this in our next implemenation. What we really want to do is
-create a spark for the application of `f` to `x` *as well* as a spark
-for the rest of the computation (i.e. the recursive call):
+We fix this in our next attempt; what we really want to do is create a
+spark for the application of `f` to `x` *as well as* a spark for the
+rest of the computation (i.e. the recursive call):
 
 ``` {.sourceCode .literate .haskell}
 parMap1 :: (a -> b) -> [a] -> [b]
@@ -237,11 +246,10 @@ task2 :: Int -> [Integer]
 task2 m = parMap1 nfib [0..m]
 ```
 
-Which runs at 491.9 ms. A great improvement. But there's still an issue.
-The issue is that `f x` is only reduced to WHNF. This was not a problem
-in our previous computation because the weak head normal form was
-actually the same as the normal form. But what if we called some devious
-function:
+Which runs at 491.9 ms. A great improvement! But there's still an issue;
+`f x` is only reduced to WHNF! This was not a problem in our previous
+computation because the weak head normal form was actually the same as
+the normal form. But what if we called some devious function:
 
 ``` {.sourceCode .literate .haskell}
 devious :: Int -> [Integer]
@@ -279,10 +287,10 @@ task4 m = parMap2 devious [0..m]
 Which runs at 428.5 ms. Phew! We're back to getting a decent speedup
 again. May the force be with you.
 
-As a last remark I want to illustrate that there can be cases where the
-task you're mapping is too small for comfort. In this, our 5th task,
-we're calling `nfib 5` a given number of times. On my machine `nfib 5`
-takes approx. 0.05 s.
+As a last remark we want to illustrate that there can be cases where the
+task the programmer is mapping is too small for comfort. In this, our
+5th task, we're calling `nfib 5` a given number of times. On my machine
+`nfib 5` takes approx. 0.05 s.
 
 ``` {.sourceCode .literate .haskell}
 task5 :: Int -> [Integer]
@@ -291,7 +299,7 @@ task5 m = parMap2 nfib $ replicate m 5
 
 This task takes 325.8 ms. Can we do better? Well, to do better we have
 to modify our `parMap` slightly. We need a way to control granularity.
-We do that like this:
+We can do that like so:
 
 ``` {.sourceCode .literate .haskell}
 parMapChunked :: NFData b => Int -> (a -> b) -> [a] -> [b]
